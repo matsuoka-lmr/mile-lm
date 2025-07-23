@@ -31,6 +31,7 @@ class History extends Model
 
     protected $casts = [
         'time' => 'datetime',
+        'device_id' => 'string',
     ];
 
     /**

@@ -80,8 +80,7 @@ class VehicleAPI extends QueryAPI
     }
 
     protected function newData($request, $params) {
-        $data = new Vehicle();
-        return $data;
+        return new Vehicle();
     }
 
     protected function setData($data, $params, $request) {
@@ -126,5 +125,10 @@ class VehicleAPI extends QueryAPI
                 break;
         }
         return new JsonResponse(['success' => $now->format('Y-m-d')]);
+    }
+
+    public function showCreateForm(Request $request) {
+        // Simply return a success response for the form display
+        return new JsonResponse(['success' => true]);
     }
 }

@@ -379,9 +379,9 @@ const init = async () => {
   loading.value = true
   try {
     const result = await api.one('vehicle', route.params.id)
-    if (result.oil_mileage) result.oil_mileage = Number(result.oil_mileage).toFixed(3)
-    if (result.tire_mileage) result.tire_mileage = Number(result.tire_mileage).toFixed(3)
-    if (result.battery_mileage) result.battery_mileage = Number(result.battery_mileage).toFixed(3)
+    if (result.oil_mileage) result.oil_mileage = Math.floor(Number(result.oil_mileage) / 1000)
+    if (result.tire_mileage) result.tire_mileage = Math.floor(Number(result.tire_mileage) / 1000)
+    if (result.battery_mileage) result.battery_mileage = Math.floor(Number(result.battery_mileage) / 1000)
     item.value = result
     trimEmails()
     org.value = JSON.stringify(result)

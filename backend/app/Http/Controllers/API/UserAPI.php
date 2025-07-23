@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Http\Controllers\QueryAPI;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Log;
 
 class UserAPI extends QueryAPI
 {

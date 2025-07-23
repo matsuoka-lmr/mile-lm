@@ -15,6 +15,11 @@ class BaseAPI extends BaseController
     protected $roles = false;
     protected $user;
 
+    public function __construct(Request $request)
+    {
+        $this->user = $request->user();
+    }
+
     protected function error($message, $errCode=500) {
         throw new HttpResponseException(new JsonResponse([
             'message' => $message

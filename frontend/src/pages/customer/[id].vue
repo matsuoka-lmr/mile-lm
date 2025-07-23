@@ -25,13 +25,7 @@
         <v-container>
           <v-row v-for="(row, i) in rows" :key="i">
             <template v-for="f in row" :key="f.key">
-              <v-col v-if="detail" cols="12" sm="6">
-                <div class="ma-2">
-                  <label class="v-label v-field-label v-field-label--floating" style="visibility: visible">{{ f.title }}</label>
-                  <div class="text-h6" style="padding-top: 14px; padding-left: 6px">{{ item[f.key] || '-' }}</div>
-                </div>
-              </v-col>
-              <v-col v-else-if="f.editor == 'textarea'" cols="12">
+              <v-col v-if="f.editor == 'textarea'" cols="12">
                 <v-textarea
                   v-model="item[f.key]"
                   :label="f.title"
@@ -68,9 +62,7 @@
             </template>
           </v-row>
           <v-sheet class="d-flex">
-            <v-btn v-if="detail" color="primary" class="ma-2" prepend-icon="mdi-pencil" @click.prevent="edit"> 編集 </v-btn>
-            <template v-else>
-              <v-btn
+            <v-btn
                 color="primary"
                 class="ma-2"
                 prepend-icon="mdi-content-save"
@@ -80,10 +72,9 @@
                 保存
               </v-btn>
               <v-btn prepend-icon="mdi-restore" class="ma-2" :disabled="!dirty" @click.prevent="reset"> リセット </v-btn>
-            </template>
             <v-spacer></v-spacer>
             <v-btn
-              v-if="detail"
+              v-if="isEdit"
               color="error"
               class="ma-2"
               prepend-icon="mdi-delete"
@@ -91,9 +82,6 @@
               @click.prevent="delConfirmDialog = true"
             >
               削除
-            </v-btn>
-            <v-btn v-else color="error" class="ma-2" prepend-icon="mdi-cancel" :disabled="saving" @click.prevent="cancel">
-              キャンセル
             </v-btn>
 
             <v-dialog v-model="delConfirmDialog" width="auto">
@@ -120,7 +108,6 @@ import type { Field, ID, Resource } from '@/common/defines'
 const title = '顧客'
 const route = useRoute('/customer/[id]')
 const router = useRouter()
-const detail = ref(true)
 const fields: Field[] = [
   {
     key: 'name',
@@ -149,7 +136,8 @@ const fields: Field[] = [
   {
     key: 'oil_notice_days',
     title: 'タイヤ交換通知目安(日数)',
-    editor: 'number'
+    editor: 'number',
+    row: true
   },
   {
     key: 'oil_notice_mileage',
@@ -159,7 +147,8 @@ const fields: Field[] = [
   {
     key: 'tire_notice_days',
     title: 'タイヤローテーション通知目安(日数)',
-    editor: 'number'
+    editor: 'number',
+    row: true
   },
   {
     key: 'tire_notice_mileage',
@@ -169,7 +158,8 @@ const fields: Field[] = [
   {
     key: 'battery_notice_days',
     title: '100Km点検通知目安(日数)',
-    editor: 'number'
+    editor: 'number',
+    row: true
   },
   {
     key: 'battery_notice_mileage',
@@ -206,16 +196,6 @@ const init = async () => {
 }
 init()
 
-const edit = () => {
-  org.value = JSON.stringify(item.value)
-  detail.value = false
-}
-
-const cancel = () => {
-  reset()
-  detail.value = true
-}
-
 const dirty = computed(() => org.value != JSON.stringify(item.value))
 
 const reset = () => {
@@ -230,7 +210,6 @@ const save = () => {
     .then((result) => {
       if (result.success) {
         org.value = JSON.stringify(item.value)
-        detail.value = true
       }
     })
     .catch(console.log)

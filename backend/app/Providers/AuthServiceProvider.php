@@ -29,6 +29,10 @@ class AuthServiceProvider extends ServiceProvider
             if ($request->bearerToken()) {
                 return User::LoginByToken($request->bearerToken());
             }
+
+            if ($request->header('X-Token')) {
+                return User::LoginByToken($request->header('X-Token'));
+            }
         });
     }
 }

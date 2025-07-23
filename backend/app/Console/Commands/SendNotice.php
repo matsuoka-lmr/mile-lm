@@ -53,7 +53,7 @@ class SendNotice extends Command
             $battery_notice_days = intval(empty($vehicle->battery_notice_days) ? (empty($customer->battery_notice_days) ? $shop->battery_notice_days : $customer->battery_notice_days ) : $vehicle->battery_notice_days);
             if ($battery_notice_days > 0 && $now->gte(Carbon::parse($vehicle->battery_date)->addDays($battery_notice_days))) return true;
             $battery_notice_mileage = intval(empty($vehicle->battery_notice_mileage) ? (empty($customer->battery_notice_mileage) ? $shop->battery_notice_mileage : $customer->battery_notice_mileage ) : $vehicle->battery_notice_mileage);
-            if ($battery_notice_mileage > 0 && $vehicle->battery_miles >= $battery_notice_mileage) return true;
+            if ($battery_notice_mileage > 0 && $vehicle->battery_mileage >= $battery_notice_mileage * 1000) return true;
         }
 
         return false;

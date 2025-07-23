@@ -42,6 +42,10 @@ class Vehicle extends Model
 
     protected $casts = [
         'attach_at' => 'datetime',
+        'device_id' => 'integer',
+        'oil_mileage' => 'float',
+        'tire_mileage' => 'float',
+        'battery_mileage' => 'float',
     ];
 
 
@@ -58,7 +62,7 @@ class Vehicle extends Model
      */
     public function device(): BelongsTo
     {
-        return $this->belongsTo(Device::class);
+        return $this->belongsTo(Device::class, 'device_id', '_id')->withCasts(['_id' => 'string']);
     }
 
     /**

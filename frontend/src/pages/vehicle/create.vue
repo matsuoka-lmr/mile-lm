@@ -203,7 +203,6 @@
               color="primary"
               class="ma-2"
               prepend-icon="mdi-content-save"
-              :disabled="saving || !dirty || !($refs['vehicleCreate'] && ($refs['vehicleCreate'] as VForm).isValid)"
               type="submit"
             >
               保存

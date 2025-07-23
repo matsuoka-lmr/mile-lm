@@ -2,6 +2,7 @@
 
 require_once __DIR__.'/../vendor/autoload.php';
 
+
 (new Laravel\Lumen\Bootstrap\LoadEnvironmentVariables(
     dirname(__DIR__)
 ))->bootstrap();
@@ -57,20 +58,25 @@ $app->singleton(
 | Register Config Files
 |--------------------------------------------------------------------------
 |
-| Now we will register the "app" configuration file. If the file is present
-| in the config directory it will be loaded and made available as the
-| application configuration. Otherwise, we'll load the default configuration.
+| Now we will register the "app" configuration file. If the file exists in
+| your configuration directory it will be loaded; otherwise, we
+| the default version. You may register other files below as needed.
 |
 */
 
 $app->configure('app');
-$app->configure('logging');
 $app->configure('cors');
 $app->configure('services');
 $app->configure('mail');
 
-// $app->configure('logging'); // logging設定ファイルをロード
-// $app->make('Psr\Log\LoggerInterface')->pushHandler(new Monolog\Handler\ErrorLogHandler());
+// $app->singleton('Psr\Log\LoggerInterface', function ($app) {
+//     $logPath = storage_path('logs/lumen-' . date('Y-m-d') . '.log');
+//     return new Monolog\Logger('lumen', [
+//         new Monolog\Handler\StreamHandler($logPath, Monolog\Logger::DEBUG),
+//     ]);
+// });
+
+
 
 /*
 |--------------------------------------------------------------------------
@@ -129,14 +135,13 @@ $app->register(App\Providers\ExternalServiceProvider::class);
 |
 */
 
-$app->router->group([
-    'namespace' => 'App\Http\Controllers',
-], function ($router) {
-    $router->group(['prefix' => 'api', 'namespace' => 'API'], function() use($router){
+$app->router->group(["namespace" => "App\Http\Controllers"], function ($router) {
+    $router->group(["prefix" => "api", "namespace" => "API"], function() use($router){
         $router->get('status', function () {
             return response()->json('ok');
         });
         $router->post('login', 'AuthAPI@login');
+
         $router->group(['middleware' => 'auth:api'], function() use($router){
             $router->get('login', 'AuthAPI@init');
             $router->get('fake[/{as}]', 'AuthAPI@fake');

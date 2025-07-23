@@ -125,9 +125,9 @@ class Test extends Command
      */
     public function handle()
     {
-        // $trackimo = app(Trackimo::class);
-        // print_r($trackimo->getDevices());
-        // print_r($trackimo->getDevicesListDetailsShort());
+        $trackimo = app(Trackimo::class);
+        print_r($trackimo->getDevices());
+        print_r($trackimo->getDevicesListDetailsShort());
         $device = Device::where('id', 6021173679)->with('Vehicle')->first();
         // print_r($device->vehicle);
         print_r(json_encode($device));

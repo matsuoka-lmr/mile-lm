@@ -142,7 +142,8 @@ const fields: Field[] = [
   {
     key: 'oil_notice_days',
     title: 'タイヤ交換通知目安(日数)',
-    editor: 'number'
+    editor: 'number',
+    row: true
   },
   {
     key: 'oil_notice_mileage',
@@ -152,7 +153,8 @@ const fields: Field[] = [
   {
     key: 'tire_notice_days',
     title: 'タイヤローテーション通知目安(日数)',
-    editor: 'number'
+    editor: 'number',
+    row: true
   },
   {
     key: 'tire_notice_mileage',
@@ -162,7 +164,8 @@ const fields: Field[] = [
   {
     key: 'battery_notice_days',
     title: '100Km点検通知目安(日数)',
-    editor: 'number'
+    editor: 'number',
+    row: true
   },
   {
     key: 'battery_notice_mileage',

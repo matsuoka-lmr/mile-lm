@@ -9,7 +9,7 @@ const serverItems = ref<Resource[]>([])
 const api = useApi()
 const router = useRouter()
 const { user } = useAuthStore()
-const shops = ref<Resource[]>(user?.role == 9 || user?.role == 99 || !user?.company ? [] : [user.company])
+const shops = ref<Resource[]>(user?.role === 99 || user?.role === 9 || user?.role === 1 || !user?.company ? [] : [user.company])
 
 const loadItems = async () => {
   loading.value = true
@@ -55,7 +55,7 @@ loadItems()
             sortable: true,
             align: 'start',
             nowrap: true,
-            value: (item) => shops.find((s) => s.id == item.manage_company_id)?.name || ''
+            value: (item) => shops.find((s) => s.id === item.manage_company_id)?.name || ''
           },
           {
             title: '会社名',

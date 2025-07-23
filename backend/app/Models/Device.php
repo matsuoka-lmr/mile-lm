@@ -12,10 +12,10 @@ class Device extends Model
      *
      * @var string
      */
-    protected $table = 'device';
+    protected $table = 'devices';
 
-    protected $primary_key = 'id';
-
+    protected $primaryKey = '_id';
+    protected $keyType = 'string';
     public $incrementing = false;
 
     /**
@@ -48,7 +48,7 @@ class Device extends Model
      */
     public function vehicle(): HasOne
     {
-        return $this->hasOne(Vehicle::class);
+        return $this->hasOne(Vehicle::class, 'device_id', '_id');
     }
 
     /**

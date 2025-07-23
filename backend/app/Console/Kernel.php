@@ -17,6 +17,8 @@ class Kernel extends ConsoleKernel
         //
         Commands\UpdateMiles::class,
         Commands\SendNotice::class,
+        Commands\TrackimoAuthTest::class,
+        Commands\CheckMongoConnection::class,
     ];
 
     /**

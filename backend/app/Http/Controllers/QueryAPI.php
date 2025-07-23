@@ -19,6 +19,7 @@ class QueryAPI extends BaseAPI
 
     protected function getByID(Request $request, $id, $params=[]) {
         $data = $this->query($request, $params)->findOrFail($id);
+        \Illuminate\Support\Facades\Log::debug('QueryAPI@getByID method response:', ['data' => $data]);
         if (empty($data)) $this->error('Not Found.', 404);
         return $data;
     }
@@ -71,6 +72,8 @@ class QueryAPI extends BaseAPI
     }
 
     public function list(Request $request) {
+        Log::info('QueryAPI@list called for path: ' . $request->path());
+        Log::info('User details:', ['user' => $this->user]);
         $this->auth($request, $this->getListRoles());
         $params = is_array($this->listValidations) ? $this->validate($request, $this->listValidations) : [];
         $list = $this->listQuery($request, $params);
@@ -93,6 +96,7 @@ class QueryAPI extends BaseAPI
                 echo '{"data":[';
                 $count = 0;
                 foreach ($list->cursor() as $item) {
+                    \Illuminate\Support\Facades\Log::debug('QueryAPI@list cursor item:', ['item' => $item]);
                     if ($count++ > 0) {
                         echo ',';
                         if ($count % 100 == 0) \ob_flush();

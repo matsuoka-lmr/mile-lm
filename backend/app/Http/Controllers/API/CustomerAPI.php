@@ -28,6 +28,13 @@ class CustomerAPI extends QueryAPI
         'phone' => 'numeric|nullable',
         'address' => 'string|nullable',
         'status' => 'numeric|nullable',
+        'memo' => 'string|nullable',
+        'oil_notice_days' => 'numeric|nullable',
+        'oil_notice_mileage' => 'numeric|nullable',
+        'tire_notice_days' => 'numeric|nullable',
+        'tire_notice_mileage' => 'numeric|nullable',
+        'battery_notice_days' => 'numeric|nullable',
+        'battery_notice_mileage' => 'numeric|nullable',
     ];
 
     protected $roles = [

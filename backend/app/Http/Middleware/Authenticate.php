@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Contracts\Auth\Factory as Auth;
 use Symfony\Component\HttpFoundation\Cookie;
+use Illuminate\Support\Facades\Log;
 
 class Authenticate
 {
@@ -36,12 +37,16 @@ class Authenticate
      */
     public function handle($request, Closure $next, $guard = null)
     {
+        Log::debug('Authenticate Middleware: handle method called.', ['path' => $request->path(), 'guard' => $guard]);
         if ($this->auth->guard($guard)->guest()) {
+            Log::warning('Authenticate Middleware: User is guest, returning 401.');
             return response('Unauthorized.', 401);
         }
 
         $response = $next($request);
-        $response->headers->set('X-Token', $request->user()->getToken());
+        if ($request->user()) {
+            $response->headers->set('X-Token', $request->user()->getToken());
+        }
         return $response;
     }
 }

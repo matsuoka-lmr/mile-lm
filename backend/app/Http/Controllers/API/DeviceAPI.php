@@ -14,34 +14,77 @@ use Illuminate\Support\Facades\Log;
 
 class DeviceAPI extends QueryAPI
 {
-    private function updateDetails() {
+    private function updateDetails()
+    {
         try {
-            $devices = [];
-            foreach(Device::all() as $device) {
-                $device->status = "deleted";
-                $devices["$device->id"] = $device;
-            }
-            $now = Carbon::now();
             $trackimo = app(Trackimo::class);
-            foreach($trackimo->getDevices() as $remote) {
-                $local = array_key_exists($remote['device_id'], $devices) ? $devices[$remote['device_id']] : new Device;
-                $local->id = $remote['device_id'];
-                $local['name'] = $remote['device_name'];
-                $local->battery = $remote['battery'];
-                $local->lat = $remote['lat'];
-                $local->lng = $remote['lng'];
-                $local->last_loc_at = $now->subSeconds($remote['age']);
-                $local->status = $remote['status'];
-                $local->save();
+            $remote_devices = $trackimo->getAccountDescendantsAndDevices($trackimo->user['account_id']);
+
+            if (empty($remote_devices)) {
+                return;
             }
-            foreach($devices as $device) {
-                if ($device->status == "deleted") {
-                    if (empty($device->company_id)) $device->delete();
-                    else $device->save();
+
+            $now = Carbon::now();
+            $device_ids = []; // To keep track of valid device IDs from remote
+
+            foreach ($remote_devices as $remote) {
+                $deviceId = (int)$remote['device_id'];
+
+                if (empty($remote['device_id']) || $deviceId <= 0) {
+                    Log::warning('[DeviceAPI] Skipping device with invalid ID.', ['remote_device' => $remote, 'processed_id' => $deviceId]);
+                    continue;
                 }
+
+                // Trackimo APIからデバイス詳細情報を取得
+                $detail = $trackimo->getDeviceDetail($deviceId);
+                Log::debug('[DeviceAPI] Full detail from Trackimo API (updateDetails):', ['detail' => $detail]);
+
+                $device_ids[] = $deviceId;
+
+                $device = Device::where('id', $deviceId)->first();
+
+                if (!$device) {
+                    $device = new Device();
+                    $device->id = $deviceId;
+                }
+
+                $device->name = $detail['info']['nick_name'] ?? null;
+                $device->imei = $detail['imei'] ?? null;
+                $device->battery = $detail['location']['battery'] ?? null;
+                Log::debug('[DeviceAPI] Battery from remote (updateDetails): ' . ($detail['location']['battery'] ?? 'N/A'));
+                $device->lat = $detail['location']['lat'] ?? null;
+                $device->lng = $detail['location']['lng'] ?? null;
+                $device->last_loc_at = isset($detail['location']['updated']) ? Carbon::createFromTimestampMs($detail['location']['updated'])->toDateTimeString() : null;
+                $device->status = $detail['location']['comm_stat'] ?? null;
+                Log::debug('[DeviceAPI] Status from comm_stat (updateDetails): ' . ($device->status ?? 'N/A'));
+
+                if (!empty($detail['settings']['id'])) {
+                    $device->settings_id = $detail['settings']['id'];
+                    if (!empty($detail['settings']['preferences']['tracking_mode'])) {
+                        $device->measure_interval = $detail['settings']['preferences']['tracking_mode']['sample_rate'];
+                        if ($detail['settings']['preferences']['tracking_mode']['tracking_measurment'] == 'minutes') {
+                            $device->measure_interval *= 60;
+                        }
+                    }
+                }
+                if (!empty($detail['features']['minimal_tracking_interval_for_second'])) {
+                    $device->minimal_interval = $detail['features']['minimal_tracking_interval_for_second'];
+                }
+
+                $device->save();
             }
-        } catch (ServiceException $e) {}
+
+            // Mark devices that are no longer in the remote list as 'deleted'
+            Device::whereNotIn('id', $device_ids)->update(['status' => 'deleted']);
+
+        } catch (ServiceException $e) {
+            Log::error('[DeviceAPI] ServiceException in updateDetails: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('[DeviceAPI] Exception in updateDetails: ' . $e->getMessage(), ['exception' => $e]);
+        }
     }
+
+    
 
     protected $filters = [
         'id' => 'like',
@@ -65,6 +108,7 @@ class DeviceAPI extends QueryAPI
     protected function query(Request $request, $params) {
         $this->updateDetails();
         $query = Device::query();
+        Log::debug('[DeviceAPI] query method: Initial device count after updateDetails: ' . $query->count());
         $unusedSearch = $request->input('search.unused', false);
         if ($unusedSearch) {
             $query = $query->doesntHave('vehicle');
@@ -80,73 +124,77 @@ class DeviceAPI extends QueryAPI
         }
 
         return $query;
-    }
+      }
 
     protected function getByID(Request $request, $id, $params=[]) {
-        $data = Device::where('id', (int)$id)->firstOrFail();
-        if (empty($data)) $this->error('Not Found.', 404);
-        if ($data->status != 'deleted') {
-            try {
-                $trackimo = app(Trackimo::class);
-                $detail = $trackimo->getDeviceDetail($data->id);
-                $data->settings_id = $detail['settings']['id'];
-                if (!empty($detail['settings']['id'])) {
-                    $data->settings_id = $detail['settings']['id'];
-                    if (!empty($detail['settings']['preferences']['tracking_mode'])) {
-                        $data->measure_interval = $detail['settings']['preferences']['tracking_mode']['sample_rate'];
-                        if ($detail['settings']['preferences']['tracking_mode']['tracking_measurment'] == 'minutes') $data->measure_interval *= 60;
-                    }
-                }
-                if (!empty($detail['features']['minimal_tracking_interval_for_second'])) {
-                    $data->minimal_interval = $detail['features']['minimal_tracking_interval_for_second'];
-                }
-                if (!empty($detail['location'])) {
-                    $data->lat = $detail['location']['lat'];
-                    $data->lng = $detail['location']['lng'];
-                    if (!empty($detail['location']['updated'])) $data->last_loc_at = $detail['location']['updated'] / 1000;
-                }
-                $data->save(['timestamps' => false]);
-            } catch (ServiceException $e) {}
+        if (!is_numeric($id)) {
+            $this->error('Invalid Device ID Format.', 400);
         }
-        return $data;
-    }
 
-    protected function newData($request, $params) {
-        $this->error('Not Implemented.', 500);
-    }
-
-    protected function saveCreatedData($data, $params) {
-        $this->error('Not Implemented.', 500);
-    }
-
-    protected function setData($data, $params, $request) {
-        if ($params['company_id'] == 'null') {
-            unset($params['company_id']);
-            $data->company_id = null;
-        }
-        $data->fill($params);
-        return $data;
-    }
-
-    protected function saveUpdatedData($data, $params) {
         try {
             $trackimo = app(Trackimo::class);
-            $trackimo->setDeviceNameAndMeasureInterval($data->id, $data->settings_id, $data->name, $data->measure_interval);
-            return $data->save();
+            $detail = $trackimo->getDeviceDetail($id);
+
+            $device = Device::where('id', (int)$id)->first();
+            if (!$device) {
+                $device = new Device();
+                $device->id = (int)$id;
+            }
+
+            $device->name = $detail['info']['nick_name'] ?? null;
+            $device->imei = $detail['imei'] ?? null;
+            $device->battery = $detail['location']['battery'] ?? null;
+            Log::debug('[DeviceAPI] Battery from detail (getByID): ' . ($detail['location']['battery'] ?? 'N/A'));
+            $device->lat = $detail['location']['lat'] ?? null;
+            $device->lng = $detail['location']['lng'] ?? null;
+            $device->last_loc_at = isset($detail['location']['updated']) ? Carbon::createFromTimestampMs($detail['location']['updated'])->toDateTimeString() : null;
+            $device->status = $detail['location']['comm_stat'] ?? null;
+            Log::debug('[DeviceAPI] Status before save (getByID): ' . ($device->status ?? 'N/A'));
+
+            if (!empty($detail['settings']['id'])) {
+                $device->settings_id = $detail['settings']['id'];
+                if (!empty($detail['settings']['preferences']['tracking_mode'])) {
+                    $device->measure_interval = $detail['settings']['preferences']['tracking_mode']['sample_rate'];
+                    if ($detail['settings']['preferences']['tracking_mode']['tracking_measurment'] == 'minutes') {
+                        $device->measure_interval *= 60;
+                    }
+                }
+            }
+            if (!empty($detail['features']['minimal_tracking_interval_for_second'])) {
+                $device->minimal_interval = $detail['features']['minimal_tracking_interval_for_second'];
+            }
+
+            $device->save();
+
+            return $device;
         } catch (ServiceException $e) {
-            return false;
+            Log::error('[DeviceAPI] Trackimo service error in getByID.', ['device_id' => $id, 'error' => $e->getMessage()]);
+            $this->error('Device not found via Trackimo API.', 404);
+        } catch (\Exception $e) {
+            Log::error('[DeviceAPI] Database or unexpected error in getByID.', ['device_id' => $id, 'exception' => $e->getMessage()]);
+            if (str_contains($e->getMessage(), 'E11000 duplicate key error')) {
+                $this->error('Database unique constraint error. This may be temporary, please try again.', 500);
+            }
+            $this->error('An internal server error occurred while fetching device details.', 500);
         }
     }
 
     public function unused(Request $request) {
         $this->auth($request, AuthConsts::MAMOL_SHOP_ROLES);
-        $company_id = in_array($this->user->role, AuthConsts::SHOP_ROLES) ? $this->user->company_id : $request->input('company_id');
-        if (empty($company_id)) $this->error('no company_id');
-        $query = Device::query()->where('company_id', $company_id)->doesntHave('vehicle');
-        // $device_id = $request->input('device_id');
-        // if (!empty($device_id)) $query = $query->orWhere('id', $device_id);
-        return new JsonResponse($query->select('id')->get());
+        $query = Device::query()->doesntHave('vehicle');
+
+        if (in_array($this->user->role, AuthConsts::SHOP_ROLES)) {
+            $query = $query->where('company_id', $this->user->company_id);
+        } else {
+            $companyId = $request->input('company_id');
+            if ($companyId) {
+                $query = $query->where('company_id', $companyId);
+            }
+        }
+
+        $result = $query->get();
+        \Illuminate\Support\Facades\Log::debug('[DeviceAPI] unused method response:', ['data' => $result]);
+        return new JsonResponse($result);
+        Log::debug('[DeviceAPI] unused method response:', ['data' => $query->get()]);
     }
-
-
 }

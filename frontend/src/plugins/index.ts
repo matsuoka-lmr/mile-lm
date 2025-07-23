@@ -8,6 +8,8 @@ import router from '../router'
 import Toast, { POSITION } from 'vue-toastification'
 import 'vue-toastification/dist/index.css'
 import vuetify from './vuetify'
+import { type App } from 'vue'
+
 export function registerPlugins(app: App) {
   app
     .use(pinia)

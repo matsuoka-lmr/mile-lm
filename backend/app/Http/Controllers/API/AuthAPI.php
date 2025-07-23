@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Symfony\Component\HttpFoundation\Cookie;
+use Illuminate\Support\Facades\Log;
 
 class AuthAPI extends Controller
 {
@@ -19,6 +20,7 @@ class AuthAPI extends Controller
             'timeout' => env('APP_AUTH_TIMEOUT', 30),
         ];
 
+        Log::debug('AuthAPI@initResponse: Response data:', $data);
         return response()->json($data)->withHeaders(['X-Token' => $user->getToken()]);
     }
 
@@ -30,16 +32,30 @@ class AuthAPI extends Controller
      */
     public function login(Request $request)
     {
+        Log::info('AuthAPI@login: Request received.');
         $user = null;
-        if ($request->filled('email') && $request->filled('password')) {
-            $credentials = $request->only(['email', 'password']);
-            $user = User::LoginByPassword(
-                $request->input('email'),
-                $request->input('password')
-            );
-            if ($user) app('auth')->setUser($user);
+        try {
+            if ($request->filled('email') && $request->filled('password')) {
+                Log::info('AuthAPI@login: Email and password are filled. Attempting User::LoginByPassword.');
+                $user = User::LoginByPassword(
+                    $request->input('email'),
+                    $request->input('password')
+                );
+                if ($user) {
+                    Log::info('AuthAPI@login: User::LoginByPassword returned a user. Setting user in auth guard.');
+                    app('auth')->setUser($user);
+                } else {
+                    Log::warning('AuthAPI@login: User::LoginByPassword returned null.');
+                }
+            } else {
+                Log::warning('AuthAPI@login: Email or password not filled.');
+            }
+            Log::info('AuthAPI@login: Calling initResponse.');
+            return $this->initResponse($user);
+        } catch (\Exception $e) {
+            Log::error('AuthAPI@login: An error occurred during login process. Error: ' . $e->getMessage());
+            return response()->json(['errors' => ['ログイン処理中にエラーが発生しました。']], 500);
         }
-        return $this->initResponse($user);
     }
 
     /**

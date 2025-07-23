@@ -33,8 +33,7 @@ class UpdateMiles extends Command
         $now = Carbon::now();
         Log::debug("After Carbon::now() for vehicle: {$vehicle->id}");
         $device = $vehicle->device;
-        Log::debug("Device object: " . json_encode($device));
-        Log::debug("After device object access for vehicle: {$vehicle->id}. Device ID: " . ($device ? $device->id : 'null') . ", Status: " . ($device ? $device->status : 'null'));
+        Log::debug("After device object access for vehicle: {$vehicle->id}. Device ID: {$device->id}, Status: {$device->status}");
 
         if (!$device) {
             Log::warning("Device not found for vehicle: {$vehicle->id} with device_id: {$vehicle->device_id}. Skipping this vehicle.");
@@ -83,9 +82,9 @@ class UpdateMiles extends Command
         }
 
         Log::debug("Processing mileage for vehicle: {$vehicle->id}");
-        $oil_meter = 0.0;
-        $tire_meter = 0.0;
-        $battery_meter = 0.0;
+        $oil_meter = isset($vehicle->oil_mileage) && !empty($vehicle->oil_mileage) ? (float)$vehicle->oil_mileage * 1000.0 : 0.0;
+        $tire_meter = isset($vehicle->tire_mileage) && !empty($vehicle->tire_mileage) ? (float)$vehicle->tire_mileage * 1000.0 : 0.0;
+        $battery_meter = isset($vehicle->battery_mileage) && !empty($vehicle->battery_mileage) ? (float)$vehicle->battery_mileage * 1000.0 : 0.0;
         Log::debug("Calculated meters: oil_meter={$oil_meter}, tire_meter={$tire_meter}, battery_meter={$battery_meter}");
 
         Log::debug("Before History query for device: {$device->id}");
@@ -94,29 +93,8 @@ class UpdateMiles extends Command
         Log::debug("After lastHist query for vehicle: {$vehicle->id}");
         $attach_at = $vehicle->attach_at->getTimestamp();
 
-        // Determine the earliest relevant timestamp for fetching history data
-        // Initialize with attach_at
-        $earliestTimestamp = $vehicle->attach_at->getTimestamp();
-
-        // Compare with oil_date, tire_date, battery_date
-        if ($oil !== null && $oil !== false) {
-            $earliestTimestamp = min($earliestTimestamp, $oil);
-        }
-
-        if ($tire !== null && $tire !== false) {
-            $earliestTimestamp = min($earliestTimestamp, $tire);
-        }
-
-        if ($battery !== null && $battery !== false) {
-            $earliestTimestamp = min($earliestTimestamp, $battery);
-        }
-
-        // Finally, compare with lastHist if it exists
-        if ($lastHist) {
-            $earliestTimestamp = min($earliestTimestamp, $lastHist->time->getTimestamp());
-        }
-
-        $from = $earliestTimestamp;
+        // Optimize $from calculation: use lastHist->time if available, otherwise attach_at
+        $from = strtotime('today 14:00');
         Log::debug("Calculated $from timestamp: {$from}");
 
         $count = 0;
@@ -126,21 +104,15 @@ class UpdateMiles extends Command
         $time = 0;
         $trackimo = app(Trackimo::class);
         Log::debug("Before getHistories call for vehicle: {$vehicle->id}");
-        $to = $now->getTimestamp();
-        $page = 1;
-        $limit = 1000; // 1ページあたりの取得件数
+        $to = strtotime('today 15:00');
+        $histories = $trackimo->getHistories($device->id, $from, $to);
+        Log::debug("Number of histories retrieved: " . count($histories));
+        Log::debug("After getHistories call for vehicle: {$vehicle->id}");
 
         do {
-            $histories = $trackimo->getHistories($device->id, $from, $to, $limit, $page);
-            Log::debug("Number of histories retrieved for page {$page}: " . count($histories));
-
-            if (empty($histories)) {
-                break; // 履歴がなければループを終了
-            }
-
-            $lastTimestampOnPage = 0; // Track the last timestamp on the current page
-
+            $count = 0;
             foreach($histories as $detail) {
+                $count++;
                 $loc = new Coordinate($detail['lat'], $detail['lng']);
                 $dist = empty($lastLoc) ? 0 : $calc->getDistance($lastLoc, $loc);
                 $lastLoc = $loc;
@@ -156,37 +128,17 @@ class UpdateMiles extends Command
                 $hist->save();
                 Log::debug("Saved history: device_id={$hist->device_id}, time={$hist->time}, lat={$hist->lat}, lng={$hist->lng}, dist={$hist->dist}");
 
-                // Update lastTimestampOnPage with the latest timestamp from the current page
-                if ($time > $lastTimestampOnPage) {
-                    $lastTimestampOnPage = $time;
-                }
-
+                if ($time >= $from) $from = $time + 1;
                 if ($time > $attach_at) {
-                    Log::debug("Mileage calculation: time={$time}, attach_at={$attach_at}, oil={$oil}, dist={$dist}");
                     if ($oil && ($time > $oil)) $oil_meter += $dist;
                     if ($tire && ($time > $tire)) $tire_meter += $dist;
                     if ($battery && ($time > $battery)) $battery_meter += $dist;
                 }
             }
-
-            // Update $from for the next API call to be one second after the last processed history's timestamp
-            // This ensures we don't re-fetch the same last record if timestamps are identical
-            if ($lastTimestampOnPage > 0) {
-                $from = $lastTimestampOnPage + 1;
-            }
-
-            $page++; // 次のページへ
-        } while (count($histories) === $limit); // Continue if the page was full, indicating more data might exist
-        if ($oil !== null && $oil !== false) {
-            $vehicle->oil_mileage = $oil_meter;
-        }
-        if ($tire !== null && $tire !== false) {
-            $vehicle->tire_mileage = $tire_meter;
-        }
-        if ($battery !== null && $battery !== false) {
-            $vehicle->battery_mileage = $battery_meter;
-        }
-        Log::debug("Final mileage values before saving: oil_mileage={$oil_meter}, tire_mileage={$tire_meter}, battery_mileage={$battery_meter}");
+        } while ($count);
+        if ($oil && ($time > $oil)) $vehicle->oil_mileage = $oil_meter;
+        if ($tire && ($time > $tire)) $vehicle->tire_mileage = $tire_meter;
+        if ($battery && ($time > $battery)) $vehicle->battery_mileage = $battery_meter;
         $device->last_measure_at = $now;
         $device->save();
         $vehicle->save();
@@ -195,23 +147,22 @@ class UpdateMiles extends Command
     public function handle()
     {
         Log::debug("[Batch]UpdateMiles started.");
-        $startTime = microtime(true);
-        $vehicles = Vehicle::all()->filter(function ($vehicle) { return isset($vehicle->device_id) && $vehicle->device_id !== null && $vehicle->device_id !== ''; });
+        $vehicles = Vehicle::all()->filter(function ($vehicle) { return isset($vehicle->device_id) && $vehicle->device_id !== null && $vehicle->device_id !== 0; });
         Log::debug("Number of vehicles after filter: " . count($vehicles));
         if ($vehicles->isEmpty()) {
             Log::debug("No vehicles to process after filtering.");
         }
-        foreach($vehicles as $vehicle) {
-            Log::debug("Attempting to process vehicle: {$vehicle->id}");
-            try {
+        foreach($vehicles as $vehicle) try {
             $this->updateHistories($vehicle);
         } catch (\Throwable $e) {
-            Log::error("updateHistories failed!(vehicle:{$vehicle->id}, device:" . ($vehicle->device_id ?? 'null') . ")");
+            Log::error("updateHistories failed!(vehicle:{$vehicle->id}, device:{$vehicle->device_id})");
             Log::debug($e);
-        }
-        }
-        $endTime = microtime(true);
+n        $endTime = microtime(true);
         $executionTime = ($endTime - $startTime);
         Log::debug("[Batch]UpdateMiles finished in " . $executionTime . " seconds.");
+n        $endTime = microtime(true);
+        $executionTime = ($endTime - $startTime);
+        Log::debug("[Batch]UpdateMiles finished in " . $executionTime . " seconds.");
+        }
     }
 }

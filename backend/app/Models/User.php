@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Laravel\Lumen\Auth\Authorizable;
 use App\Consts\AuthConsts;
 
@@ -92,10 +93,15 @@ class User extends Model implements AuthenticatableContract, AuthorizableContrac
     {
         $today = date("Y-m-d");
         $user = User::where('email', $account)->with('company')->first();
-        if ($user !== null && Hash::check($password, $user->password)) {
-            $user->last_login_at = $today;
-            $user->save();
-            return $user;
+        Log::debug('User::LoginByPassword: User found:', ['user_email' => $user ? $user->email : 'null']);
+        if ($user !== null) {
+            $passwordCheck = Hash::check($password, $user->password);
+            Log::debug('User::LoginByPassword: Password check result:', ['result' => $passwordCheck]);
+            if ($passwordCheck) {
+                $user->last_login_at = $today;
+                $user->save();
+                return $user;
+            }
         }
         return null;
     }
